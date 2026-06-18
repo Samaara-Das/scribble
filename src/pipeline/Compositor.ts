@@ -44,6 +44,12 @@ export class Compositor {
       /* play() can reject without a gesture; the loop still pulls frames once ready */
     }
     await this.waitForFrame();
+    if (this.video.videoWidth === 0) {
+      // The source never produced frames. Rather than risk transmitting a black
+      // video on a live call, bail — the media patch catches this and returns the
+      // original (un-composited) stream, so the real camera always works.
+      throw new Error('Scribble: source produced no frames; falling back to original stream');
+    }
     this.syncSize();
     this.running = true;
     this.loop();

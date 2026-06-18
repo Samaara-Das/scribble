@@ -26,6 +26,9 @@ export class ScribbleApp implements StreamWrapper, ToolbarController {
   private drawActive = false;
   private strokeStart = 0;
   private started = false;
+  private alive = true;
+  private overlayRaf = 0;
+  private readonly onResize = () => this.sizeOverlay();
 
   constructor() {
     this.isTest =
@@ -59,7 +62,9 @@ export class ScribbleApp implements StreamWrapper, ToolbarController {
     if (this.started) return;
     this.started = true;
     installMediaPatch(this);
-    if (this.isTest) this.exposeTestApi();
+    // The test hook is stripped from production builds (esbuild dead-code-eliminates
+    // this when NODE_ENV==='production'), so it can never inject on a real site.
+    if (this.isTest && process.env.NODE_ENV !== 'production') this.exposeTestApi();
     const boot = () => {
       this.sizeOverlay();
       (document.body || document.documentElement).appendChild(this.overlay);
@@ -67,7 +72,8 @@ export class ScribbleApp implements StreamWrapper, ToolbarController {
       this.recorder.start('camera');
       this.attachInput();
       this.listenHotkeys();
-      window.addEventListener('resize', () => this.sizeOverlay());
+      window.addEventListener('resize', this.onResize);
+      window.addEventListener('pagehide', () => this.dispose(), { once: true });
       this.overlayLoop();
     };
     if (document.body) boot();
@@ -84,11 +90,20 @@ export class ScribbleApp implements StreamWrapper, ToolbarController {
     const out = await comp.start();
     this.compositors.set(target, comp);
 
-    if (target === 'camera' && !this.handTracker) {
-      this.handTracker = new HandTracker(this.resolveBase(), (s) => this.onHand(s));
-      this.handTracker.start(stream).catch((e) =>
-        console.warn('[Scribble] hand tracker unavailable, mouse still works', e),
-      );
+    if (target === 'camera') {
+      if (!this.handTracker) {
+        const tracker = new HandTracker(this.resolveBase(), (s) => this.onHand(s));
+        this.handTracker = tracker;
+        tracker.start(stream).catch((e) => {
+          console.warn('[Scribble] hand tracker unavailable, mouse still works', e);
+          if (this.handTracker === tracker) this.handTracker = null; // allow retry next wrap
+        });
+      } else {
+        // camera toggled/switched — re-point tracking at the new stream
+        this.handTracker.restart(stream).catch((e) =>
+          console.warn('[Scribble] hand tracker restart failed', e),
+        );
+      }
     }
     return out;
   }
@@ -178,11 +193,24 @@ export class ScribbleApp implements StreamWrapper, ToolbarController {
   }
 
   private overlayLoop = (): void => {
+    if (!this.alive) return;
     const now = performance.now();
     this.octx.clearRect(0, 0, this.overlay.width, this.overlay.height);
     renderStrokes(this.octx, this.engine.getRenderList(now), now);
-    requestAnimationFrame(this.overlayLoop);
+    this.overlayRaf = requestAnimationFrame(this.overlayLoop);
   };
+
+  /** Tear down everything (called on pagehide) so nothing leaks across SPA nav. */
+  private dispose(): void {
+    if (!this.alive) return;
+    this.alive = false;
+    if (this.overlayRaf) cancelAnimationFrame(this.overlayRaf);
+    window.removeEventListener('resize', this.onResize);
+    this.handTracker?.stop();
+    for (const c of this.compositors.values()) c.stop();
+    this.compositors.clear();
+    this.overlay.remove();
+  }
 
   private exposeTestApi(): void {
     const api: ScribbleTestApi = {

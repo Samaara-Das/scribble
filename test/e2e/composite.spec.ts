@@ -47,7 +47,29 @@ test('CAMERA COMPOSITE PROOF — annotation appears in the outbound getUserMedia
       { x: 0.8, y: 0.8 },
     ]);
   });
-  await page.waitForTimeout(700); // let the 30fps compositor paint the stroke
+
+  // Poll until the composited stroke appears (robust to compositor start-up /
+  // CPU contention) instead of a fixed wait.
+  await page.waitForFunction(
+    () => {
+      const v = document.getElementById('cam') as HTMLVideoElement | null;
+      if (!v || !v.videoWidth) return false;
+      const c = document.createElement('canvas');
+      c.width = v.videoWidth;
+      c.height = v.videoHeight;
+      const g = c.getContext('2d')!;
+      g.drawImage(v, 0, 0, c.width, c.height);
+      let hits = 0;
+      for (let i = 0; i <= 8; i++) {
+        const f = 0.2 + 0.6 * (i / 8);
+        const d = g.getImageData(Math.floor(f * c.width), Math.floor(f * c.height), 1, 1).data;
+        if (d[0] > 140 && d[1] < 110 && d[2] < 110) hits++;
+      }
+      return hits >= 3;
+    },
+    null,
+    { timeout: 12_000 },
+  );
 
   const { diag, control } = await page.evaluate(() => {
     const v = document.getElementById('cam') as HTMLVideoElement;

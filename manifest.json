@@ -3,7 +3,6 @@
   "name": "Scribble — draw on your video calls",
   "version": "0.1.0",
   "description": "Draw and annotate on your camera and screen-share during video calls, with your finger (webcam) or mouse. Free.",
-  "permissions": ["storage"],
   "host_permissions": [
     "https://*.zoom.us/*",
     "https://meet.google.com/*",

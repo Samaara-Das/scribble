@@ -64,8 +64,29 @@ export class HandTracker {
 
   async start(source: MediaStream): Promise<void> {
     await this.init();
-    const tracks = source.getVideoTracks().map((t) => t.clone());
-    this.stream = new MediaStream(tracks);
+    await this.attach(source);
+  }
+
+  /**
+   * Re-point the tracker at a NEW camera stream (e.g. after the user toggles
+   * their camera off/on) without reloading the model — stops the stale clone and
+   * resets the smoothing/pinch state so tracking doesn't run on a dead source.
+   */
+  async restart(source: MediaStream): Promise<void> {
+    await this.init();
+    this.running = false;
+    if (this.raf) cancelAnimationFrame(this.raf);
+    this.video.srcObject = null; // detach old source; the app owns/stops those tracks
+    this.filter.reset();
+    this.pinch.reset();
+    await this.attach(source);
+  }
+
+  private async attach(source: MediaStream): Promise<void> {
+    // Share the app's camera tracks (do NOT clone). A clone would hold an
+    // independent camera handle and keep the camera LED on after the user
+    // toggles their camera off. Multiple <video> elements can read one track.
+    this.stream = new MediaStream(source.getVideoTracks());
     this.video.srcObject = this.stream;
     try {
       await this.video.play();
@@ -108,7 +129,7 @@ export class HandTracker {
   stop(): void {
     this.running = false;
     if (this.raf) cancelAnimationFrame(this.raf);
-    this.stream?.getTracks().forEach((t) => t.stop());
+    // Don't stop the shared camera tracks — the meeting app owns their lifecycle.
     this.video.srcObject = null;
   }
 

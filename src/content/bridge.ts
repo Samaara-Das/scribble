@@ -14,7 +14,8 @@ import { SCRIBBLE_BASE_ATTR, SCRIBBLE_EVENT } from '../shared/types';
     /* not in an extension context (e.g. unit env) */
   }
 
-  chrome.runtime?.onMessage?.addListener((msg: { type?: string }) => {
+  chrome.runtime?.onMessage?.addListener((msg: { type?: string }, sender) => {
+    if (sender?.id !== chrome.runtime.id) return; // only trust our own SW
     if (msg?.type === 'scribble:toggle-draw') {
       window.dispatchEvent(new CustomEvent(SCRIBBLE_EVENT.toggleDraw));
     } else if (msg?.type === 'scribble:toggle-input') {
