@@ -1,19 +1,16 @@
 // Runs INSIDE a hidden extension-origin iframe (immune to the meeting site's
-// Trusted Types). Two capture paths, chosen at runtime for lowest latency:
-//   SELF  (preferred): the iframe calls getUserMedia itself and detects on its own
-//          video via requestVideoFrameCallback — no per-frame transfer from the page.
-//   FRAMES (fallback): if the iframe can't open the camera (Meet Permissions-Policy),
-//          the parent pumps frames in and we detect on those.
-// Either way we post ONLY {x,y,down,present} coords back — never pixels.
+// Trusted Types — loading MediaPipe directly in the page's MAIN world throws
+// "requires TrustedScriptURL"). The iframe does NOT open its own camera: on Meet,
+// the meeting already holds the camera, so a second getUserMedia returns a black/
+// frozen feed and detection finds no hand. Instead the parent (which owns the
+// meeting's real camera via the wrapped getUserMedia) transfers downscaled frames
+// in (zero-copy ImageBitmap, requestVideoFrameCallback-driven). We post back only
+// {x,y,down,present} coords — never pixels.
 import { FilesetResolver, HandLandmarker } from '@mediapipe/tasks-vision';
 import type { HandLandmark, HandSample } from '../shared/types';
 import { OneEuroFilter2D } from '../pipeline/oneEuroFilter';
 import { PinchDetector } from '../pipeline/pinchDetector';
 import { CoordMapper } from '../pipeline/coordMapper';
-
-type RVFCVideo = HTMLVideoElement & {
-  requestVideoFrameCallback?: (cb: (now: number) => void) => number;
-};
 
 const ASSET_BASE = location.href.replace(/tracker\.html.*$/, '');
 
@@ -49,7 +46,7 @@ async function initModel(): Promise<void> {
   }
 }
 
-function detect(source: HTMLVideoElement | HTMLCanvasElement, ts: number): void {
+function detect(source: HTMLCanvasElement, ts: number): void {
   if (!landmarker) return;
   let res: ReturnType<HandLandmarker['detectForVideo']> | null = null;
   try {
@@ -74,49 +71,7 @@ function detect(source: HTMLVideoElement | HTMLCanvasElement, ts: number): void 
   }
 }
 
-/** Preferred path: open the camera here and detect as fast as frames arrive.
- *  Races a 1.5s timeout so a hung/pending getUserMedia (Meet can leave it pending
- *  behind a permission state) falls back to frame-transfer instead of dying. */
-async function startSelfCapture(): Promise<boolean> {
-  let stream: MediaStream;
-  let timedOut = false;
-  const gum = navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240 } });
-  // If we already fell back when a late prompt resolves, stop it (no stray camera LED).
-  gum.then((s) => timedOut && s.getTracks().forEach((t) => t.stop())).catch(() => {});
-  try {
-    stream = await Promise.race([
-      gum,
-      new Promise<MediaStream>((_, reject) =>
-        setTimeout(() => {
-          timedOut = true;
-          reject(new Error('gum-timeout'));
-        }, 1500),
-      ),
-    ]);
-  } catch {
-    return false;
-  }
-  try {
-    const video = document.createElement('video') as RVFCVideo;
-    video.muted = true;
-    video.playsInline = true;
-    video.srcObject = stream;
-    await video.play();
-    const pump = (): void => {
-      if (video.readyState >= 2) detect(video, performance.now());
-      if (video.requestVideoFrameCallback) video.requestVideoFrameCallback(pump);
-      else requestAnimationFrame(pump);
-    };
-    if (video.requestVideoFrameCallback) video.requestVideoFrameCallback(pump);
-    else requestAnimationFrame(pump);
-    return true;
-  } catch {
-    stream.getTracks().forEach((t) => t.stop());
-    return false;
-  }
-}
-
-// Fallback path: detect on frames the parent transfers in.
+// Detect on frames the parent transfers in.
 window.addEventListener('message', (e: MessageEvent) => {
   if (e.source !== parent) return;
   const data = e.data as { type?: string; bitmap?: ImageBitmap; ts?: number };
@@ -136,11 +91,6 @@ window.addEventListener('message', (e: MessageEvent) => {
   detect(work, ts);
 });
 
-async function main(): Promise<void> {
-  await initModel();
-  const self = await startSelfCapture();
-  if (self) post({ type: 'scribble:tracker-ready', mode: 'self', delegate });
-  else post({ type: 'scribble:tracker-need-frames', delegate });
-}
-
-main().catch((err) => post({ type: 'scribble:tracker-error', error: String(err) }));
+initModel()
+  .then(() => post({ type: 'scribble:tracker-need-frames', delegate }))
+  .catch((err) => post({ type: 'scribble:tracker-error', error: String(err) }));
