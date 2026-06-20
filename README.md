@@ -2,6 +2,8 @@
 
 **Draw on your video calls — with your finger or your mouse. Free.**
 
+![Scribble in action — drawing live on a Google Meet call](docs/scribble-demo.png)
+
 Scribble is a Chrome extension that lets you annotate live during a video meeting. Doodle a circle,
 throw an arrow, highlight a line — over your **camera video** while you talk, or over your
 **screen-share** — and everyone in the call sees it. Draw with your **mouse**, or wave your hand and
