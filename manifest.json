@@ -1,0 +1,57 @@
+{
+  "manifest_version": 3,
+  "name": "Scribble — draw on your video calls",
+  "version": "0.1.0",
+  "description": "Draw and annotate on your camera and screen-share during video calls, with your finger (webcam) or mouse. Free.",
+  "host_permissions": [
+    "https://*.zoom.us/*",
+    "https://meet.google.com/*",
+    "https://teams.microsoft.com/*"
+  ],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.zoom.us/*",
+        "https://meet.google.com/*",
+        "https://teams.microsoft.com/*",
+        "http://localhost:5174/*"
+      ],
+      "js": ["bridge.js"],
+      "run_at": "document_start",
+      "all_frames": true
+    },
+    {
+      "matches": [
+        "https://*.zoom.us/*",
+        "https://meet.google.com/*",
+        "https://teams.microsoft.com/*",
+        "http://localhost:5174/*"
+      ],
+      "js": ["sentinel.js"],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": true
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["tracker.html", "tracker.js", "mediapipe/*"],
+      "matches": [
+        "https://*.zoom.us/*",
+        "https://meet.google.com/*",
+        "https://teams.microsoft.com/*",
+        "http://localhost:5174/*"
+      ]
+    }
+  ],
+  "commands": {
+    "toggle-draw": {
+      "suggested_key": { "default": "Ctrl+Shift+D" },
+      "description": "Toggle Scribble draw mode"
+    }
+  }
+}

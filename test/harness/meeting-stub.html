@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Scribble meeting stub</title>
+    <style>
+      body { font-family: system-ui, sans-serif; background: #111; color: #eee; margin: 0; padding: 16px; }
+      .row { display: flex; gap: 16px; flex-wrap: wrap; }
+      video { width: 480px; height: 360px; background: #000; border-radius: 8px; }
+      button { font-size: 15px; padding: 8px 14px; margin: 8px 8px 8px 0; border-radius: 8px; border: 0; cursor: pointer; }
+    </style>
+  </head>
+  <body>
+    <h2>Scribble meeting stub</h2>
+    <p>Stands in for a web meeting client: calls getUserMedia / getDisplayMedia, which Scribble patches.</p>
+    <button id="startCam">Start camera</button>
+    <button id="shareScreen">Share screen</button>
+    <div class="row">
+      <video id="cam" autoplay playsinline muted></video>
+      <video id="screen" autoplay playsinline muted></video>
+    </div>
+    <script>
+      // These calls run in the page's MAIN world, where Scribble's sentinel has
+      // already patched navigator.mediaDevices.* at document_start.
+      const w = window;
+      document.getElementById('startCam').addEventListener('click', async () => {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+          w.__cameraStream = stream;
+          document.getElementById('cam').srcObject = stream;
+        } catch (e) {
+          w.__cameraError = String(e);
+          console.error('getUserMedia failed', e);
+        }
+      });
+      document.getElementById('shareScreen').addEventListener('click', async () => {
+        try {
+          const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+          w.__screenStream = stream;
+          document.getElementById('screen').srcObject = stream;
+        } catch (e) {
+          w.__screenError = String(e);
+          console.error('getDisplayMedia failed', e);
+        }
+      });
+    </script>
+  </body>
+</html>
