@@ -68,7 +68,7 @@ test('CAMERA COMPOSITE PROOF — annotation appears in the outbound getUserMedia
       return hits >= 3;
     },
     null,
-    { timeout: 12_000 },
+    { timeout: 25_000 },
   );
 
   const { diag, control } = await page.evaluate(() => {

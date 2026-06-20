@@ -24,6 +24,7 @@ export class ScribbleApp implements StreamWrapper, ToolbarController {
   private tracker: FingerTracker | null = null;
   private readonly isTest: boolean;
   private drawActive = false;
+  private lastFinger: { x: number; y: number; down: boolean } | null = null;
   private started = false;
   private alive = true;
   private overlayRaf = 0;
@@ -177,6 +178,7 @@ export class ScribbleApp implements StreamWrapper, ToolbarController {
 
   private onHand(s: HandSample): void {
     this.toolbar.setFingerPresent(s.present);
+    this.lastFinger = s.present ? { x: s.x, y: s.y, down: s.down } : null;
     if (this.drawActive) this.input.onHand(s);
   }
 
@@ -198,8 +200,26 @@ export class ScribbleApp implements StreamWrapper, ToolbarController {
     const now = performance.now();
     this.octx.clearRect(0, 0, this.overlay.width, this.overlay.height);
     renderStrokes(this.octx, this.engine.getRenderList(now), now);
+    this.drawFingerCursor();
     this.overlayRaf = requestAnimationFrame(this.overlayLoop);
   };
+
+  /** Live dot at the fingertip — instant local feedback (the self-view tile lags ~150ms). */
+  private drawFingerCursor(): void {
+    if (!this.drawActive || !this.lastFinger || this.input.mode !== 'finger') return;
+    const x = this.lastFinger.x * this.overlay.width;
+    const y = this.lastFinger.y * this.overlay.height;
+    const ctx = this.octx;
+    ctx.save();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.fillStyle = this.lastFinger.down ? 'rgba(10,132,255,0.55)' : 'rgba(255,255,255,0.12)';
+    ctx.beginPath();
+    ctx.arc(x, y, this.lastFinger.down ? 7 : 11, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
 
   /** Tear down everything (called on pagehide) so nothing leaks across SPA nav. */
   private dispose(): void {
