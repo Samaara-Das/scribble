@@ -74,10 +74,29 @@ function detect(source: HTMLVideoElement | HTMLCanvasElement, ts: number): void 
   }
 }
 
-/** Preferred path: open the camera here and detect as fast as frames arrive. */
+/** Preferred path: open the camera here and detect as fast as frames arrive.
+ *  Races a 1.5s timeout so a hung/pending getUserMedia (Meet can leave it pending
+ *  behind a permission state) falls back to frame-transfer instead of dying. */
 async function startSelfCapture(): Promise<boolean> {
+  let stream: MediaStream;
+  let timedOut = false;
+  const gum = navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240 } });
+  // If we already fell back when a late prompt resolves, stop it (no stray camera LED).
+  gum.then((s) => timedOut && s.getTracks().forEach((t) => t.stop())).catch(() => {});
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240 } });
+    stream = await Promise.race([
+      gum,
+      new Promise<MediaStream>((_, reject) =>
+        setTimeout(() => {
+          timedOut = true;
+          reject(new Error('gum-timeout'));
+        }, 1500),
+      ),
+    ]);
+  } catch {
+    return false;
+  }
+  try {
     const video = document.createElement('video') as RVFCVideo;
     video.muted = true;
     video.playsInline = true;
@@ -92,6 +111,7 @@ async function startSelfCapture(): Promise<boolean> {
     else requestAnimationFrame(pump);
     return true;
   } catch {
+    stream.getTracks().forEach((t) => t.stop());
     return false;
   }
 }
