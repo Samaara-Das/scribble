@@ -24,11 +24,11 @@ export class ScribbleApp implements StreamWrapper, ToolbarController {
   private tracker: FingerTracker | null = null;
   private readonly isTest: boolean;
   private drawActive = false;
-  private strokeStart = 0;
   private started = false;
   private alive = true;
   private overlayRaf = 0;
   private readonly onResize = () => this.sizeOverlay();
+  // (stroke timestamps are absolute performance.now() so laser fade compares clocks correctly)
 
   constructor() {
     this.isTest =
@@ -147,7 +147,6 @@ export class ScribbleApp implements StreamWrapper, ToolbarController {
   }
 
   private sinkBegin(x: number, y: number): void {
-    this.strokeStart = performance.now();
     this.engine.beginStroke(this.pt(x, y));
   }
   private sinkEnd(): void {
@@ -155,7 +154,9 @@ export class ScribbleApp implements StreamWrapper, ToolbarController {
     if (s) this.recorder.record(s);
   }
   private pt(x: number, y: number): Point {
-    return { x, y, t: performance.now() - this.strokeStart, pressure: 1 };
+    // absolute clock so laser's expiresAt (createdAt + LASER_MS) compares against
+    // the same performance.now() the renderer uses — otherwise it expires instantly
+    return { x, y, t: performance.now(), pressure: 1 };
   }
 
   private attachInput(): void {
@@ -219,7 +220,6 @@ export class ScribbleApp implements StreamWrapper, ToolbarController {
       setWidth: (w) => this.engine.setWidth(w),
       drawStroke: (points) => {
         if (points.length === 0) return;
-        this.strokeStart = performance.now();
         this.engine.beginStroke(this.pt(points[0].x, points[0].y));
         for (let i = 1; i < points.length; i++) {
           this.engine.extendStroke(this.pt(points[i].x, points[i].y));
