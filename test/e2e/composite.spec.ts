@@ -172,3 +172,73 @@ test('SCREEN-SHARE COMPOSITE PROOF — annotation composited onto the screen-sha
       `blue source preserved rgb(${bg.r},${bg.g},${bg.b}) — PASS`,
   );
 });
+
+test('ERASER PROOF — eraser reveals the source video, not black', async () => {
+  ctx = await launchWithExtension();
+  const page = await ctx.newPage();
+  await page.goto(STUB_URL);
+  await page.waitForFunction(() => !!(window as { __scribbleApp?: unknown }).__scribbleApp, null, {
+    timeout: 20_000,
+  });
+
+  const { drawn, erased } = await page.evaluate(async () => {
+    const t = (window as unknown as { __scribbleTest: import('../../src/shared/types').ScribbleTestApi })
+      .__scribbleTest;
+
+    // solid blue source through the production compositor
+    const src = document.createElement('canvas');
+    src.width = 640;
+    src.height = 480;
+    const sg = src.getContext('2d')!;
+    let painting = true;
+    const paint = () => {
+      if (!painting) return;
+      sg.fillStyle = '#0000ff';
+      sg.fillRect(0, 0, 640, 480);
+      requestAnimationFrame(paint);
+    };
+    paint();
+    const app = (window as unknown as {
+      __scribbleApp: { wrapStream(s: MediaStream, target: 'camera' | 'screen'): Promise<MediaStream> };
+    }).__scribbleApp;
+    const out = await app.wrapStream((src as HTMLCanvasElement).captureStream(30), 'screen');
+    const v = document.createElement('video');
+    v.muted = true;
+    v.srcObject = out;
+    await v.play().catch(() => {});
+
+    const sample = async (): Promise<{ r: number; g: number; b: number }> => {
+      await new Promise((r) => setTimeout(r, 400));
+      const c = document.createElement('canvas');
+      c.width = v.videoWidth || 640;
+      c.height = v.videoHeight || 480;
+      const g = c.getContext('2d')!;
+      g.drawImage(v, 0, 0, c.width, c.height);
+      const d = g.getImageData(Math.floor(0.5 * c.width), Math.floor(0.5 * c.height), 1, 1).data;
+      return { r: d[0], g: d[1], b: d[2] };
+    };
+
+    t.setTool('pen');
+    t.setColor('#ff0000');
+    t.setWidth(22);
+    t.drawStroke([{ x: 0.3, y: 0.5 }, { x: 0.5, y: 0.5 }, { x: 0.7, y: 0.5 }]);
+    const drawn = await sample();
+
+    t.setTool('eraser');
+    t.setWidth(40);
+    t.drawStroke([{ x: 0.3, y: 0.5 }, { x: 0.5, y: 0.5 }, { x: 0.7, y: 0.5 }]);
+    const erased = await sample();
+
+    painting = false;
+    return { drawn, erased };
+  });
+
+  expect(isRed(drawn), `expected red ink before erasing, got rgb(${drawn.r},${drawn.g},${drawn.b})`).toBeTruthy();
+  const blueRestored = erased.b > 120 && erased.r < 110;
+  const notBlack = erased.r + erased.g + erased.b > 40;
+  expect(blueRestored && notBlack, `eraser should reveal blue source, got rgb(${erased.r},${erased.g},${erased.b})`).toBeTruthy();
+  console.log(
+    `✅ ERASER PROOF — drew red rgb(${drawn.r},${drawn.g},${drawn.b}), erased back to source ` +
+      `blue rgb(${erased.r},${erased.g},${erased.b}) (NOT black) — PASS`,
+  );
+});

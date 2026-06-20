@@ -19,6 +19,8 @@ const entries = [
   { in: 'src/inject/sentinel.ts', out: 'sentinel', format: 'iife' },
   { in: 'src/content/bridge.ts', out: 'bridge', format: 'iife' },
   { in: 'src/background.ts', out: 'background', format: 'esm' },
+  // Loaded by tracker.html inside a hidden extension-origin iframe (MediaPipe lives here).
+  { in: 'src/tracker/tracker.ts', out: 'tracker', format: 'iife' },
 ];
 
 function stripLocalhost(manifest) {

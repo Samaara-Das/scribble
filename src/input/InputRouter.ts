@@ -1,7 +1,7 @@
 // Arbitrates finger-tracking vs mouse into one unified pointer stream.
 // Finger is the hero; mouse always works as a fallback (even in finger mode, when
 // no hand is being tracked). Coordinates are NORMALIZED (0..1).
-import type { HandSample } from '../pipeline/HandTracker';
+import type { HandSample } from '../shared/types';
 
 export type InputMode = 'finger' | 'mouse';
 

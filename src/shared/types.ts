@@ -59,6 +59,15 @@ export interface TrackedHand {
   score: number;
 }
 
+/** Smoothed fingertip + pinch state, in NORMALIZED 0..1 canvas coords. */
+export interface HandSample {
+  x: number;
+  y: number;
+  down: boolean;
+  present: boolean;
+  score: number;
+}
+
 /** Cross-world event names (bridge <-> MAIN runtime, via DOM CustomEvents). */
 export const SCRIBBLE_EVENT = {
   toggleDraw: 'scribble:toggle-draw',
@@ -77,8 +86,8 @@ export interface ScribbleTestApi {
   clear(): void;
   /** force the annotation overlay to render into the active composite target now */
   flush(): void;
-  /** load the bundled MediaPipe model + run one in-browser inference (proof) */
-  probeHands(): Promise<{ initialized: boolean; landmarks: number }>;
   /** number of committed strokes (for drive tests) */
   strokeCount(): number;
+  /** is the hand-tracking iframe up and reporting? (true once a sample arrives) */
+  trackerReady(): boolean;
 }

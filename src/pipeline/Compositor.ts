@@ -16,6 +16,10 @@ export class Compositor {
   private video: HTMLVideoElement;
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
+  /** Annotations render here (transparent) then composite OVER the video, so the
+   *  eraser (destination-out) removes only ink — never the video underneath. */
+  private annotationCanvas: HTMLCanvasElement;
+  private annotationCtx: CanvasRenderingContext2D;
   private out: MediaStream | null = null;
   private raf = 0;
   private running = false;
@@ -34,6 +38,13 @@ export class Compositor {
     const ctx = this.canvas.getContext('2d', { alpha: false });
     if (!ctx) throw new Error('Scribble: 2D context unavailable');
     this.ctx = ctx;
+
+    this.annotationCanvas = document.createElement('canvas');
+    this.annotationCanvas.width = 640;
+    this.annotationCanvas.height = 480;
+    const actx = this.annotationCanvas.getContext('2d');
+    if (!actx) throw new Error('Scribble: annotation 2D context unavailable');
+    this.annotationCtx = actx;
   }
 
   async start(): Promise<MediaStream> {
@@ -84,23 +95,33 @@ export class Compositor {
       this.canvas.width = w;
       this.canvas.height = h;
     }
+    if (this.annotationCanvas.width !== w || this.annotationCanvas.height !== h) {
+      this.annotationCanvas.width = w;
+      this.annotationCanvas.height = h;
+    }
   }
 
   private loop = (): void => {
     if (!this.running) return;
     this.syncSize();
-    const { ctx, canvas } = this;
+    const { ctx, canvas, annotationCtx, annotationCanvas } = this;
+    // 1) the live video frame onto the opaque output canvas
     if (this.video.readyState >= 2) {
       ctx.drawImage(this.video, 0, 0, canvas.width, canvas.height);
     } else {
       ctx.fillStyle = '#000';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
+    // 2) annotations onto a SEPARATE transparent layer (eraser = destination-out
+    //    clears ink to transparent here, not into the video)
+    annotationCtx.clearRect(0, 0, annotationCanvas.width, annotationCanvas.height);
     try {
-      this.draw(ctx, performance.now());
+      this.draw(annotationCtx, performance.now());
     } catch {
       /* never let an annotation error break the call's video */
     }
+    // 3) composite the ink over the video — erased (transparent) areas show the video
+    ctx.drawImage(annotationCanvas, 0, 0);
     this.raf = requestAnimationFrame(this.loop);
   };
 

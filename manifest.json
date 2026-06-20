@@ -34,9 +34,12 @@
       "all_frames": true
     }
   ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  },
   "web_accessible_resources": [
     {
-      "resources": ["mediapipe/*"],
+      "resources": ["tracker.html", "tracker.js", "mediapipe/*"],
       "matches": [
         "https://*.zoom.us/*",
         "https://meet.google.com/*",

@@ -6,12 +6,12 @@ import { DrawingEngine } from '../drawing/DrawingEngine';
 import { renderStrokes } from '../drawing/renderStrokes';
 import { SessionRecorder } from '../session/SessionRecorder';
 import { Compositor } from '../pipeline/Compositor';
-import { HandTracker, type HandSample } from '../pipeline/HandTracker';
+import { FingerTracker } from '../pipeline/FingerTracker';
 import { InputRouter, type InputMode } from '../input/InputRouter';
 import { Toolbar, type ToolbarController } from '../ui/Toolbar';
 import { installMediaPatch, type StreamWrapper } from './mediaPatch';
 import { SCRIBBLE_EVENT, SCRIBBLE_BASE_ATTR } from '../shared/types';
-import type { AnnotationTarget, ToolKind, Point, ScribbleTestApi } from '../shared/types';
+import type { AnnotationTarget, ToolKind, Point, ScribbleTestApi, HandSample } from '../shared/types';
 
 export class ScribbleApp implements StreamWrapper, ToolbarController {
   private readonly engine = new DrawingEngine();
@@ -21,7 +21,7 @@ export class ScribbleApp implements StreamWrapper, ToolbarController {
   private readonly overlay: HTMLCanvasElement;
   private readonly octx: CanvasRenderingContext2D;
   private readonly compositors = new Map<AnnotationTarget, Compositor>();
-  private handTracker: HandTracker | null = null;
+  private tracker: FingerTracker | null = null;
   private readonly isTest: boolean;
   private drawActive = false;
   private strokeStart = 0;
@@ -91,16 +91,16 @@ export class ScribbleApp implements StreamWrapper, ToolbarController {
     this.compositors.set(target, comp);
 
     if (target === 'camera') {
-      if (!this.handTracker) {
-        const tracker = new HandTracker(this.resolveBase(), (s) => this.onHand(s));
-        this.handTracker = tracker;
+      if (!this.tracker) {
+        const tracker = new FingerTracker(this.resolveBase(), (s) => this.onHand(s));
+        this.tracker = tracker;
         tracker.start(stream).catch((e) => {
           console.warn('[Scribble] hand tracker unavailable, mouse still works', e);
-          if (this.handTracker === tracker) this.handTracker = null; // allow retry next wrap
+          if (this.tracker === tracker) this.tracker = null; // allow retry next wrap
         });
       } else {
         // camera toggled/switched — re-point tracking at the new stream
-        this.handTracker.restart(stream).catch((e) =>
+        this.tracker.restart(stream).catch((e) =>
           console.warn('[Scribble] hand tracker restart failed', e),
         );
       }
@@ -206,7 +206,7 @@ export class ScribbleApp implements StreamWrapper, ToolbarController {
     this.alive = false;
     if (this.overlayRaf) cancelAnimationFrame(this.overlayRaf);
     window.removeEventListener('resize', this.onResize);
-    this.handTracker?.stop();
+    this.tracker?.stop();
     for (const c of this.compositors.values()) c.stop();
     this.compositors.clear();
     this.overlay.remove();
@@ -232,8 +232,8 @@ export class ScribbleApp implements StreamWrapper, ToolbarController {
         this.octx.clearRect(0, 0, this.overlay.width, this.overlay.height);
         renderStrokes(this.octx, this.engine.getRenderList(now), now);
       },
-      probeHands: () => HandTracker.probe(this.resolveBase()),
       strokeCount: () => this.engine.getStrokes().length,
+      trackerReady: () => this.tracker?.isReady ?? false,
     };
     (window as unknown as { __scribbleTest?: ScribbleTestApi }).__scribbleTest = api;
   }
