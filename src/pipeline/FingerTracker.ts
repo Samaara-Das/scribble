@@ -7,7 +7,7 @@ import type { HandSample } from '../shared/types';
 
 export type HandCallback = (s: HandSample) => void;
 
-const SEND_INTERVAL = 1000 / 20; // 20fps is plenty for cursor control
+const SEND_INTERVAL = 1000 / 30; // 30fps for lower perceived lag
 const FRAME_W = 320;
 const FRAME_H = 240;
 

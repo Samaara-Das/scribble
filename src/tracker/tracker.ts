@@ -18,9 +18,13 @@ import { CoordMapper } from '../pipeline/coordMapper';
 const ASSET_BASE = location.href.replace(/tracker\.html.*$/, '');
 
 let landmarker: HandLandmarker | null = null;
-const filter = new OneEuroFilter2D({ minCutoff: 1.2, beta: 0.02 });
+// Less smoothing lag (higher minCutoff + much higher beta so it tracks fast moves).
+const filter = new OneEuroFilter2D({ minCutoff: 2.6, beta: 1.2 });
 const pinch = new PinchDetector();
-const mapper = new CoordMapper({ width: 1, height: 1, gain: 1.4, deadZone: 0.08, mirror: true });
+// mirror:false — we draw on the RAW camera frame, so the cursor follows the hand
+// correctly in BOTH the user's mirrored self-view AND what others see. (mirror:true
+// inverted it → "drawings don't happen where I want".) Gain near 1:1 for precision.
+const mapper = new CoordMapper({ width: 1, height: 1, gain: 1.15, deadZone: 0.06, mirror: false });
 const work = document.createElement('canvas');
 const workCtx = work.getContext('2d');
 let lastSeen = 0;
