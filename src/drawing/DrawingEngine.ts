@@ -123,6 +123,25 @@ export class DrawingEngine {
     this.history.clear();
   }
 
+  /**
+   * Object-eraser: remove any committed stroke that passes within `radius`
+   * (normalized 0..1 units) of (x, y). Deterministic and renderer-agnostic — works
+   * identically on the local overlay and the composited stream (unlike a
+   * destination-out eraser, which is fragile across canvases). Returns count removed.
+   */
+  eraseAt(x: number, y: number, radius = 0.035): number {
+    const r2 = radius * radius;
+    return this.history.removeWhere(
+      (s) =>
+        s.tool !== 'eraser' &&
+        s.points.some((p) => {
+          const dx = p.x - x;
+          const dy = p.y - y;
+          return dx * dx + dy * dy <= r2;
+        }),
+    );
+  }
+
   /** Undo the last committed stroke. */
   undo(): Stroke | undefined {
     return this.history.undo();

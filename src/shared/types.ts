@@ -83,6 +83,8 @@ export interface ScribbleTestApi {
   setColor(color: string): void;
   setWidth(width: number): void;
   drawStroke(points: Array<{ x: number; y: number }>): void;
+  /** object-eraser: remove strokes near each point (normalized coords) */
+  erase(points: Array<{ x: number; y: number }>): void;
   clear(): void;
   /** force the annotation overlay to render into the active composite target now */
   flush(): void;

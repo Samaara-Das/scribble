@@ -11,8 +11,8 @@ import type { HandSample } from '../shared/types';
 
 export type HandCallback = (s: HandSample) => void;
 
-const FRAME_W = 320;
-const FRAME_H = 240;
+const FRAME_W = 256;
+const FRAME_H = 192;
 
 type RVFCVideo = HTMLVideoElement & {
   requestVideoFrameCallback?: (cb: (now: number) => void) => number;
@@ -28,6 +28,10 @@ export class FingerTracker {
   private mode: 'pending' | 'self' | 'frames' = 'pending';
   private ready = false;
   private pumping = false;
+  // latency instrumentation
+  private latSum = 0;
+  private latN = 0;
+  private latLogAt = 0;
 
   constructor(baseUrl: string, cb: HandCallback) {
     const base = baseUrl.endsWith('/') ? baseUrl : baseUrl + '/';
@@ -60,7 +64,14 @@ export class FingerTracker {
 
     this.onMessage = (e: MessageEvent) => {
       if (e.source !== this.iframe.contentWindow) return;
-      const d = e.data as { type?: string; sample?: HandSample; mode?: string; delegate?: string; error?: string };
+      const d = e.data as {
+        type?: string;
+        sample?: HandSample;
+        ts?: number;
+        mode?: string;
+        delegate?: string;
+        error?: string;
+      };
       if (!d) return;
       if (d.type === 'scribble:tracker-ready') {
         this.mode = 'self';
@@ -72,6 +83,7 @@ export class FingerTracker {
         console.debug('[Scribble] hand tracker: frame-transfer mode, delegate', d.delegate);
         if (this.pendingStream) this.attachAndPump(this.pendingStream);
       } else if (d.type === 'scribble:hand' && d.sample) {
+        if (typeof d.ts === 'number' && d.sample.present) this.logLatency(performance.now() - d.ts);
         this.cb(d.sample);
       } else if (d.type === 'scribble:tracker-error') {
         console.warn('[Scribble] hand tracker iframe error', d.error);
@@ -133,6 +145,18 @@ export class FingerTracker {
       .catch(() => {
         /* transient; next frame retries */
       });
+  }
+
+  private logLatency(ms: number): void {
+    this.latSum += ms;
+    this.latN += 1;
+    const now = performance.now();
+    if (now - this.latLogAt > 2000) {
+      console.debug(`[Scribble] finger latency ~${Math.round(this.latSum / this.latN)}ms (n=${this.latN})`);
+      this.latSum = 0;
+      this.latN = 0;
+      this.latLogAt = now;
+    }
   }
 
   stop(): void {

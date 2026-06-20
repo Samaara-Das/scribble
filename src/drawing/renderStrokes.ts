@@ -59,12 +59,10 @@ export function renderStrokes(ctx: Ctx2D, strokes: Stroke[], now: number): void 
     ctx.lineWidth = Math.max(1, s.width * scale);
 
     const isShape = s.tool === 'line' || s.tool === 'rect' || s.tool === 'ellipse' || s.tool === 'arrow';
-    const smooth = !isShape && s.tool !== 'eraser';
+    const smooth = !isShape;
 
-    if (s.tool === 'eraser') {
-      ctx.globalCompositeOperation = 'destination-out';
-      ctx.lineWidth = Math.max(8, s.width * scale * 2);
-    } else if (s.tool === 'highlighter') {
+    // (eraser is handled by stroke removal in DrawingEngine.eraseAt — no destination-out here)
+    if (s.tool === 'highlighter') {
       ctx.globalAlpha = 0.32;
       ctx.lineWidth = Math.max(10, s.width * scale * 3);
     } else if (s.tool === 'laser') {

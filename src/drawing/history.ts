@@ -43,6 +43,15 @@ export class History {
     this.redoStack.length = 0;
   }
 
+  /** Remove committed strokes matching `pred` (an erase action). Returns the count removed. */
+  removeWhere(pred: (s: Stroke) => boolean): number {
+    const before = this.committed.length;
+    this.committed = this.committed.filter((s) => !pred(s));
+    const removed = before - this.committed.length;
+    if (removed > 0) this.redoStack.length = 0;
+    return removed;
+  }
+
   /** The live committed list (in draw order). */
   get strokes(): Stroke[] {
     return this.committed;

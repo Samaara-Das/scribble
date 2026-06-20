@@ -181,7 +181,7 @@ test('ERASER PROOF — eraser reveals the source video, not black', async () => 
     timeout: 20_000,
   });
 
-  const { drawn, erased } = await page.evaluate(async () => {
+  const { drawn, erased, countBefore, countAfter } = await page.evaluate(async () => {
     const t = (window as unknown as { __scribbleTest: import('../../src/shared/types').ScribbleTestApi })
       .__scribbleTest;
 
@@ -223,22 +223,24 @@ test('ERASER PROOF — eraser reveals the source video, not black', async () => 
     t.setWidth(22);
     t.drawStroke([{ x: 0.3, y: 0.5 }, { x: 0.5, y: 0.5 }, { x: 0.7, y: 0.5 }]);
     const drawn = await sample();
+    const countBefore = t.strokeCount();
 
-    t.setTool('eraser');
-    t.setWidth(40);
-    t.drawStroke([{ x: 0.3, y: 0.5 }, { x: 0.5, y: 0.5 }, { x: 0.7, y: 0.5 }]);
+    // object-eraser: removing the stroke must reveal the source (no destination-out)
+    t.erase([{ x: 0.3, y: 0.5 }, { x: 0.5, y: 0.5 }, { x: 0.7, y: 0.5 }]);
     const erased = await sample();
+    const countAfter = t.strokeCount();
 
     painting = false;
-    return { drawn, erased };
+    return { drawn, erased, countBefore, countAfter };
   });
 
   expect(isRed(drawn), `expected red ink before erasing, got rgb(${drawn.r},${drawn.g},${drawn.b})`).toBeTruthy();
+  expect(countBefore, 'one stroke before erasing').toBe(1);
+  expect(countAfter, 'stroke removed after erasing').toBe(0);
   const blueRestored = erased.b > 120 && erased.r < 110;
-  const notBlack = erased.r + erased.g + erased.b > 40;
-  expect(blueRestored && notBlack, `eraser should reveal blue source, got rgb(${erased.r},${erased.g},${erased.b})`).toBeTruthy();
+  expect(blueRestored, `eraser should reveal blue source, got rgb(${erased.r},${erased.g},${erased.b})`).toBeTruthy();
   console.log(
-    `✅ ERASER PROOF — drew red rgb(${drawn.r},${drawn.g},${drawn.b}), erased back to source ` +
-      `blue rgb(${erased.r},${erased.g},${erased.b}) (NOT black) — PASS`,
+    `✅ ERASER PROOF — drew red (strokes ${countBefore}), erased → strokes ${countAfter}, ` +
+      `source blue revealed rgb(${erased.r},${erased.g},${erased.b}) — PASS`,
   );
 });

@@ -76,3 +76,53 @@ test('TOOLBAR DRIVE — activate draw, mouse-draw a stroke, before/after screens
       `Screenshots: ${before} , ${after}`,
   );
 });
+
+test('ERASER DRIVE — mouse eraser removes a stroke on the overlay', async () => {
+  ctx = await launchWithExtension();
+  const page = await ctx.newPage();
+  await page.goto(STUB_URL);
+  await page.waitForFunction(() => !!(window as { __scribbleTest?: unknown }).__scribbleTest, null, {
+    timeout: 20_000,
+  });
+  const count = () =>
+    page.evaluate(
+      () =>
+        (window as unknown as { __scribbleTest: import('../../src/shared/types').ScribbleTestApi })
+          .__scribbleTest.strokeCount(),
+    );
+  const clickByText = (text: string) =>
+    page.evaluate((t) => {
+      const host = document.getElementById('scribble-toolbar-host')!;
+      const btns = Array.from(host.shadowRoot!.querySelectorAll('button')) as HTMLButtonElement[];
+      btns.find((b) => b.textContent?.includes(t))?.click();
+    }, text);
+  const clickByTitle = (title: string) =>
+    page.evaluate((t) => {
+      const host = document.getElementById('scribble-toolbar-host')!;
+      const btns = Array.from(host.shadowRoot!.querySelectorAll('button')) as HTMLButtonElement[];
+      btns.find((b) => b.title === t)?.click();
+    }, title);
+
+  await clickByText('Draw'); // draw mode on
+
+  const box = page.viewportSize()!;
+  const stroke = async () => {
+    await page.mouse.move(box.width * 0.4, box.height * 0.5);
+    await page.mouse.down();
+    await page.mouse.move(box.width * 0.5, box.height * 0.55, { steps: 8 });
+    await page.mouse.move(box.width * 0.6, box.height * 0.6, { steps: 8 });
+    await page.mouse.up();
+    await page.waitForTimeout(150);
+  };
+
+  await stroke();
+  const drawn = await count();
+  expect(drawn, 'pen stroke committed').toBeGreaterThan(0);
+
+  await clickByTitle('Eraser'); // select eraser
+  await stroke(); // drag the eraser back over the same path
+  const erased = await count();
+
+  expect(erased, `eraser should remove the stroke (drawn=${drawn}, erased=${erased})`).toBe(0);
+  console.log(`✅ ERASER DRIVE — mouse eraser removed the overlay stroke (${drawn} -> ${erased}) — PASS`);
+});

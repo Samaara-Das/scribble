@@ -51,7 +51,7 @@ export class ScribbleApp implements StreamWrapper, ToolbarController {
 
     this.input = new InputRouter({
       begin: (x, y) => this.sinkBegin(x, y),
-      move: (x, y) => this.engine.extendStroke(this.pt(x, y)),
+      move: (x, y) => this.sinkMove(x, y),
       end: () => this.sinkEnd(),
     });
 
@@ -148,9 +148,21 @@ export class ScribbleApp implements StreamWrapper, ToolbarController {
   }
 
   private sinkBegin(x: number, y: number): void {
+    if (this.engine.getTool() === 'eraser') {
+      this.engine.eraseAt(x, y);
+      return;
+    }
     this.engine.beginStroke(this.pt(x, y));
   }
+  private sinkMove(x: number, y: number): void {
+    if (this.engine.getTool() === 'eraser') {
+      this.engine.eraseAt(x, y);
+      return;
+    }
+    this.engine.extendStroke(this.pt(x, y));
+  }
   private sinkEnd(): void {
+    if (this.engine.getTool() === 'eraser') return;
     const s = this.engine.endStroke();
     if (s) this.recorder.record(s);
   }
@@ -246,6 +258,7 @@ export class ScribbleApp implements StreamWrapper, ToolbarController {
         }
         this.sinkEnd();
       },
+      erase: (points) => points.forEach((p) => this.engine.eraseAt(p.x, p.y)),
       clear: () => this.engine.clear(),
       flush: () => {
         const now = performance.now();

@@ -23,6 +23,34 @@ const work = document.createElement('canvas');
 const workCtx = work.getContext('2d', { willReadFrequently: true });
 let lastSeen = 0;
 
+// Forward prediction: extrapolate the fingertip by its velocity to hide the
+// pipeline latency (what stylus drawing apps do). Modest + clamped so it doesn't
+// overshoot on direction changes.
+const PREDICT_MS = 55;
+const MAX_PRED = 0.05; // normalized clamp
+let lastP: { x: number; y: number; t: number } | null = null;
+
+function predict(x: number, y: number, t: number): { x: number; y: number } {
+  let px = x;
+  let py = y;
+  if (lastP) {
+    const dt = t - lastP.t;
+    if (dt > 0 && dt < 200) {
+      let dx = ((x - lastP.x) / dt) * PREDICT_MS;
+      let dy = ((y - lastP.y) / dt) * PREDICT_MS;
+      const m = Math.hypot(dx, dy);
+      if (m > MAX_PRED) {
+        dx = (dx / m) * MAX_PRED;
+        dy = (dy / m) * MAX_PRED;
+      }
+      px = Math.max(0, Math.min(1, x + dx));
+      py = Math.max(0, Math.min(1, y + dy));
+    }
+  }
+  lastP = { x, y, t };
+  return { x: px, y: py };
+}
+
 function post(msg: unknown): void {
   parent.postMessage(msg, '*');
 }
@@ -61,13 +89,15 @@ function detect(source: HTMLCanvasElement, ts: number): void {
     const tip = lm[8];
     const mapped = mapper.map(tip.x, tip.y);
     const sm = filter.filter(mapped, ts);
+    const p = predict(sm.x, sm.y, ts);
     lastSeen = ts;
-    const sample: HandSample = { x: sm.x, y: sm.y, down, present: true, score: 1 };
-    post({ type: 'scribble:hand', sample });
+    const sample: HandSample = { x: p.x, y: p.y, down, present: true, score: 1 };
+    post({ type: 'scribble:hand', sample, ts }); // echo capture ts for latency measurement
   } else if (ts - lastSeen > 400) {
     pinch.reset();
+    lastP = null;
     const sample: HandSample = { x: 0, y: 0, down: false, present: false, score: 0 };
-    post({ type: 'scribble:hand', sample });
+    post({ type: 'scribble:hand', sample, ts });
   }
 }
 
